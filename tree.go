@@ -29,7 +29,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"sync"
 )
 
 type NodeFlushFn func(VerkleNode)
@@ -170,8 +169,6 @@ type (
 		commitment *Point
 
 		committer Committer
-
-		lock sync.Mutex
 	}
 
 	LeafNode struct {
@@ -217,23 +214,9 @@ func (n *InternalNode) SetChild(i int, c VerkleNode) error {
 }
 
 func (n *InternalNode) Insert(key []byte, value []byte, resolver NodeResolverFn) error {
-	// Prevent access to that subtree so that nodes aren't
-	// flushed from under us.
-	if n.depth >= 2 {
-		n.lock.Lock()
-		defer n.lock.Unlock()
-	}
-
 	// Clear cached commitment on modification
 	n.commitment = nil
-
-	err := n.insertUnlocked(key, value, resolver)
-	if err != nil {
-		return err
-	}
-
-	n.ComputeCommitment()
-	return nil
+	return n.insertUnlocked(key, value, resolver)
 }
 
 func (n *InternalNode) insertUnlocked(key []byte, value []byte, resolver NodeResolverFn) error {
@@ -316,13 +299,6 @@ func (n *InternalNode) insertUnlocked(key []byte, value []byte, resolver NodeRes
 // InsertStem does the same thing as Insert, except all values in an extension-and-suffix node
 // are inserted at once.
 func (n *InternalNode) InsertStem(stem []byte, values [][]byte, resolver NodeResolverFn) error {
-	// Prevent access to that subtree so that nodes aren't
-	// flushed from under us.
-	if n.depth >= 2 {
-		n.lock.Lock()
-		defer n.lock.Unlock()
-	}
-
 	// Clear cached commitment on modification
 	n.commitment = nil
 
@@ -330,7 +306,7 @@ func (n *InternalNode) InsertStem(stem []byte, values [][]byte, resolver NodeRes
 	if err != nil {
 		return err
 	}
-
+	panic(1)
 	n.ComputeCommitment()
 	return nil
 }
@@ -352,6 +328,7 @@ func (n *InternalNode) insertStemUnlocked(stem []byte, values [][]byte, resolver
 		if resolver == nil {
 			return errInsertIntoHash
 		}
+		panic(2)
 		hash := child.ComputeCommitment().Bytes()
 		serialized, err := resolver(hash[:])
 		if err != nil {
@@ -521,11 +498,6 @@ func (n *InternalNode) InsertOrdered(key []byte, value []byte, flush NodeFlushFn
 }
 
 func (n *InternalNode) Delete(key []byte) error {
-	if n.depth >= 2 {
-		n.lock.Lock()
-		defer n.lock.Unlock()
-	}
-
 	// Clear cached commitment on modification
 	n.commitment = nil
 
@@ -545,8 +517,6 @@ func (n *InternalNode) Delete(key []byte) error {
 func (n *InternalNode) Flush(flush NodeFlushFn) {
 	for i, child := range n.children {
 		if c, ok := child.(*InternalNode); ok {
-			c.lock.Lock()
-			defer c.lock.Unlock()
 			c.ComputeCommitment()
 			c.Flush(flush)
 			n.children[i] = c.toHashedNode()
@@ -577,9 +547,6 @@ func (n *InternalNode) FlushAtDepth(depth uint8, flush NodeFlushFn) {
 		if n.depth >= depth {
 			// Lock the subtree so no insertion
 			// occur during the flush.
-			c.lock.Lock()
-			defer c.lock.Unlock()
-
 			child.ComputeCommitment()
 			c.Flush(flush)
 			n.children[i] = c.toHashedNode()
@@ -589,11 +556,6 @@ func (n *InternalNode) FlushAtDepth(depth uint8, flush NodeFlushFn) {
 
 func (n *InternalNode) Get(k []byte, getter NodeResolverFn) ([]byte, error) {
 	nChild := offset2key(k, n.depth)
-	if n.depth >= 2 {
-		n.lock.Lock()
-		defer n.lock.Unlock()
-	}
-
 	switch child := n.children[nChild].(type) {
 	case Empty, nil:
 		// Return nil as a signal that the value isn't
@@ -618,6 +580,7 @@ func (n *InternalNode) Get(k []byte, getter NodeResolverFn) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		panic(3)
 		c.ComputeCommitment()
 		n.children[nChild] = c
 
@@ -823,6 +786,7 @@ func (n *LeafNode) Insert(k []byte, value []byte, _ NodeResolverFn) error {
 	}
 	n.values[k[31]] = value
 	n.commitment = nil
+	//panic(6)
 	n.ComputeCommitment()
 	return nil
 }
@@ -834,6 +798,7 @@ func (n *LeafNode) insertStem(k []byte, values [][]byte) error {
 	}
 	n.values = values
 	n.commitment = nil
+	panic(5)
 	n.ComputeCommitment()
 	return nil
 }
