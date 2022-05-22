@@ -214,12 +214,12 @@ func (n *InternalNode) SetChild(i int, c VerkleNode) error {
 }
 
 func (n *InternalNode) Insert(key []byte, value []byte, resolver NodeResolverFn) error {
-	// Clear cached commitment on modification
-	n.commitment = nil
 	return n.insertUnlocked(key, value, resolver)
 }
 
 func (n *InternalNode) insertUnlocked(key []byte, value []byte, resolver NodeResolverFn) error {
+	// Clear cached commitment on modification
+	n.commitment = nil
 	nChild := offset2key(key, n.depth)
 
 	switch child := n.children[nChild].(type) {
@@ -787,7 +787,7 @@ func (n *LeafNode) Insert(k []byte, value []byte, _ NodeResolverFn) error {
 	n.values[k[31]] = value
 	n.commitment = nil
 	//panic(6)
-	n.ComputeCommitment()
+	//n.ComputeCommitment()
 	return nil
 }
 

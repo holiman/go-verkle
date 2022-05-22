@@ -19,38 +19,41 @@ func main() {
 	desc := `
 This is a benchmarker which writes key/values to a verkle tree. 
 - The keys are 32 bytes, 
-- The values are 100-1000 bytes, 
+- The values are 32 bytes, 
 
-The back-end is a hash sponge. After each 1000 writes to the backend, it output 
-the sponge state.`
+It outputs the root committment after writing 5300 kv-pairs. 
+It aborts after 10 seconds, writing cpu.prof and mem.prof files to disk.
+`
 	fmt.Println(desc)
 
 	tree := verkle.New()
 	start := time.Now()
 	k := make([]byte, 32)
-	//v := make([]byte, 1024)
 	v := make([]byte, 32)
+
+	cp := func(src []byte) []byte {
+		x := make([]byte, len(src))
+		copy(x, src)
+		return x
+	}
 	rnd := rand.New(rand.NewSource(1024))
+
 	for i := 0; ; i++ {
 		rnd.Read(k)
 		rnd.Read(v)
-		//vLen := 100 + (rnd.Uint32() % 900)
-		if err := tree.Insert(k, v, nil); err != nil {
+		if err := tree.Insert(cp(k), cp(v), nil); err != nil {
 			panic(err)
 		}
 		if i%5300 == 0 {
-			//point := []byte{}
 			point := tree.ComputeCommitment().Bytes()
 			fmt.Printf("Wrote %d elements to tree, in %v, speed %.02f items/ms, root %x\n",
 				i, time.Since(start),
 				float64(i*int(time.Millisecond))/float64(time.Since(start)),
 				point)
-
 		}
 		if time.Since(start) > 10*time.Second {
 			fmt.Printf("Wrote %d elements to tree, in %v\n", i, time.Since(start))
 			break
 		}
 	}
-
 }
