@@ -45,14 +45,11 @@ It aborts after 10 seconds, writing cpu.prof and mem.prof files to disk.
 		rnd.Read(v)
 		k := cp(k)
 		v := cp(v)
-		workers.Perform(func() {
-			if err := tree.Insert(k, v, nil); err != nil {
-				panic(err)
-			}
-		}, k[0]%8)
+		if err := tree.Insert(k, v, nil); err != nil {
+			panic(err)
+		}
 		if i%5300 == 0 {
-			workers.WaitIdle()
-			point := tree.ComputeCommitment().Bytes()
+			point := tree.(*verkle.InternalNode).ComputeCommitmentParallel().Bytes()
 			fmt.Printf("Wrote %d elements to tree, in %v, speed %.02f items/ms, root %x\n",
 				i, time.Since(start),
 				float64(i*int(time.Millisecond))/float64(time.Since(start)),

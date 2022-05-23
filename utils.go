@@ -22,14 +22,8 @@ func (p *ProcessorPool) Perform(task func(), queue byte) {
 }
 
 func worker(id int, jobs chan func()) {
-	for {
-		select {
-		case job, open := <-jobs:
-			if !open {
-				return
-			}
-			job()
-		}
+	for job := range jobs {
+		job()
 	}
 }
 
@@ -70,7 +64,7 @@ func (p *ProcessorPool) Shutdown() {
 // Shutdown will wait until all currently executing jobs are done.
 func (p *ProcessorPool) WaitIdle() {
 	var wg sync.WaitGroup
-	wg.Add(8)
+	wg.Add(len(p.queues))
 	for _, queue := range p.queues {
 		queue <- func() {
 			wg.Done()

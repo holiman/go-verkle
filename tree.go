@@ -29,6 +29,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sync"
 )
 
 type NodeFlushFn func(VerkleNode)
@@ -221,7 +222,6 @@ func (n *InternalNode) insertUnlocked(key []byte, value []byte, resolver NodeRes
 	// Clear cached commitment on modification
 	n.commitment = nil
 	nChild := offset2key(key, n.depth)
-
 	switch child := n.children[nChild].(type) {
 	case Empty:
 		lastNode := &LeafNode{
@@ -590,6 +590,53 @@ func (n *InternalNode) Get(k []byte, getter NodeResolverFn) ([]byte, error) {
 	}
 }
 
+func (n *InternalNode) ComputeCommitmentParallel() *Point {
+	// Special cases of a node with no children: either it's
+	// an empty root, or it's an invalid node.
+	if n.count == 0 {
+		if n.depth != 0 {
+			panic("internal node should be empty node")
+		}
+
+		// case of an empty root
+		n.commitment = new(Point)
+		n.commitment.Identity()
+		return n.commitment
+	}
+	var wg sync.WaitGroup
+	wg.Add(8)
+	poly := make([]Fr, NodeWidth)
+	var works = make(chan int, 16)
+
+	for i := 0; i < 8; i++ {
+		go func() {
+			for idx := range works {
+				child := n.children[idx]
+				child.ComputeCommitment()
+				toFr(&poly[idx], child.ComputeCommitment())
+			}
+			wg.Done()
+		}()
+	}
+
+	emptyChildren := 0
+	for idx, child := range n.children {
+		switch child.(type) {
+		case Empty:
+			emptyChildren++
+		default:
+			works <- idx
+		}
+	}
+	close(works)
+	wg.Wait()
+
+	// All the coefficients have been computed, evaluate the polynomial,
+	// serialize and hash the resulting point - this is the commitment.
+	n.commitment = n.committer.CommitToPoly(poly, emptyChildren)
+	return n.commitment
+
+}
 func (n *InternalNode) ComputeCommitment() *Point {
 	if n.commitment != nil {
 		return n.commitment
