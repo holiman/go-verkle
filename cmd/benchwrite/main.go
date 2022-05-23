@@ -37,14 +37,21 @@ It aborts after 10 seconds, writing cpu.prof and mem.prof files to disk.
 		return x
 	}
 	rnd := rand.New(rand.NewSource(1024))
+	var workers = new(verkle.ProcessorPool)
+	workers.Start()
 
 	for i := 0; ; i++ {
 		rnd.Read(k)
 		rnd.Read(v)
-		if err := tree.Insert(cp(k), cp(v), nil); err != nil {
-			panic(err)
-		}
+		k := cp(k)
+		v := cp(v)
+		workers.Perform(func() {
+			if err := tree.Insert(k, v, nil); err != nil {
+				panic(err)
+			}
+		}, k[0]%8)
 		if i%5300 == 0 {
+			workers.WaitIdle()
 			point := tree.ComputeCommitment().Bytes()
 			fmt.Printf("Wrote %d elements to tree, in %v, speed %.02f items/ms, root %x\n",
 				i, time.Since(start),
@@ -56,4 +63,5 @@ It aborts after 10 seconds, writing cpu.prof and mem.prof files to disk.
 			break
 		}
 	}
+	workers.Shutdown()
 }
